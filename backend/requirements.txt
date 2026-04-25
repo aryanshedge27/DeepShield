@@ -1,0 +1,12 @@
+flask==3.0.2
+flask-cors==4.0.0
+flask-sqlalchemy==3.1.1
+torch
+torchvision
+timm==0.9.16
+Pillow
+opencv-python-headless==4.9.0.80
+facenet-pytorch==2.5.3
+ 
+python-dotenv==1.0.1
+gunicorn==21.2.0

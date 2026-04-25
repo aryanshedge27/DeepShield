@@ -1,0 +1,35 @@
+{
+  "6adcdfeb79b876ecfaf347c76e04ffd8fb66484e2d509bd6b6bee3ac8180d4bf": {
+    "sha256": "6adcdfeb79b876ecfaf347c76e04ffd8fb66484e2d509bd6b6bee3ac8180d4bf",
+    "timestamp": 1777093374,
+    "metadata": {
+      "filename": "IMG-20250817-WA0042.jpg",
+      "media_type": "image",
+      "verdict": "FAKE",
+      "fake_score": 0.5053
+    },
+    "block": "LOCAL-00001"
+  },
+  "b7470b4bd4c71a0cfa9fa504932dd9d25f6056914912496e8f67cb23cf38ecac": {
+    "sha256": "b7470b4bd4c71a0cfa9fa504932dd9d25f6056914912496e8f67cb23cf38ecac",
+    "timestamp": 1777093481,
+    "metadata": {
+      "filename": "WhatsApp Image 2025-02-26 at 12.22.50 PM.jpeg",
+      "media_type": "image",
+      "verdict": "FAKE",
+      "fake_score": 0.5049
+    },
+    "block": "LOCAL-00002"
+  },
+  "7fba7e4ff08feed42469c1e72dbef5ed3637ec591d43c80763754b7feeb41336": {
+    "sha256": "7fba7e4ff08feed42469c1e72dbef5ed3637ec591d43c80763754b7feeb41336",
+    "timestamp": 1777093756,
+    "metadata": {
+      "filename": "WhatsApp Image 2025-10-11 at 15.32.58_06d6b425.jpg",
+      "media_type": "image",
+      "verdict": "FAKE",
+      "fake_score": 0.5086
+    },
+    "block": "LOCAL-00003"
+  }
+}
