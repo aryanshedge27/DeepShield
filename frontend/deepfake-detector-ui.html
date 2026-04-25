@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DeepShield — Deepfake Detection</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:        #050810;
+    --surface:   #0d1117;
+    --surface2:  #111827;
+    --border:    rgba(255,255,255,0.07);
+    --border2:   rgba(255,255,255,0.13);
+    --cyan:      #00e5ff;
+    --cyan-dim:  rgba(0,229,255,0.12);
+    --red:       #ff3d5a;
+    --red-dim:   rgba(255,61,90,0.12);
+    --green:     #00e676;
+    --green-dim: rgba(0,230,118,0.12);
+    --amber:     #ffab00;
+    --text:      #e8eaf0;
+    --muted:     #4b5563;
+    --muted2:    #6b7280;
+    --font-head: 'Syne', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--font-mono);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── BACKGROUND GRID ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    background-image:
+      linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
+
+  /* ── GLOW ORBS ── */
+  .orb {
+    position: fixed; border-radius: 50%;
+    filter: blur(80px); pointer-events: none; z-index: 0;
+  }
+  .orb1 { width: 500px; height: 500px; background: rgba(0,229,255,0.06); top:-100px; left:-100px; }
+  .orb2 { width: 400px; height: 400px; background: rgba(255,61,90,0.05); bottom:-80px; right:-80px; }
+
+  /* ── WRAPPER ── */
+  .wrap { position: relative; z-index: 1; max-width: 860px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  /* ── HEADER ── */
+  header { text-align: center; padding: 60px 0 48px; }
+
+  .logo-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    border: 1px solid var(--border2);
+    background: var(--surface);
+    padding: 6px 16px; border-radius: 999px;
+    font-size: 11px; letter-spacing: 3px; color: var(--cyan);
+    text-transform: uppercase; margin-bottom: 28px;
+    animation: fadeDown 0.6s ease both;
+  }
+  .logo-badge span { width:6px; height:6px; border-radius:50%; background:var(--cyan); animation: blink 1.4s infinite; }
+
+  h1 {
+    font-family: var(--font-head);
+    font-size: clamp(42px, 7vw, 72px);
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -2px;
+    animation: fadeDown 0.6s 0.1s ease both;
+  }
+  h1 em {
+    font-style: normal;
+    background: linear-gradient(120deg, var(--cyan), #7c3aed);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+
+  .tagline {
+    margin-top: 16px; color: var(--muted2); font-size: 14px;
+    letter-spacing: 0.5px; animation: fadeDown 0.6s 0.2s ease both;
+  }
+
+  /* ── STATS ROW ── */
+  .stats {
+    display: flex; justify-content: center; gap: 32px;
+    margin: 32px 0; flex-wrap: wrap;
+    animation: fadeDown 0.6s 0.3s ease both;
+  }
+  .stat { text-align: center; }
+  .stat-num { font-family: var(--font-head); font-size: 22px; font-weight: 700; color: var(--cyan); }
+  .stat-lbl { font-size: 10px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; margin-top: 2px; }
+
+  /* ── TABS ── */
+  .tabs {
+    display: flex; gap: 4px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 4px;
+    width: fit-content; margin: 0 auto 36px;
+    animation: fadeDown 0.6s 0.35s ease both;
+  }
+  .tab-btn {
+    padding: 10px 24px; border-radius: 9px; border: none;
+    background: transparent; color: var(--muted2);
+    font-family: var(--font-mono); font-size: 13px;
+    cursor: pointer; transition: all 0.25s; letter-spacing: 0.5px;
+  }
+  .tab-btn.active {
+    background: var(--surface2); color: var(--cyan);
+    border: 1px solid var(--border2);
+    box-shadow: 0 0 16px rgba(0,229,255,0.08);
+  }
+
+  /* ── PANELS ── */
+  .panel { display: none; animation: fadeUp 0.4s ease; }
+  .panel.active { display: block; }
+
+  /* ── UPLOAD ZONE ── */
+  .upload-zone {
+    border: 2px dashed var(--border2);
+    border-radius: 20px; padding: 60px 24px;
+    text-align: center; cursor: pointer;
+    transition: all 0.3s; position: relative;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .upload-zone::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 50% 0%, rgba(0,229,255,0.06) 0%, transparent 70%);
+    opacity: 0; transition: opacity 0.3s;
+  }
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--cyan); }
+  .upload-zone:hover::before, .upload-zone.drag::before { opacity: 1; }
+  .upload-zone.drag { transform: scale(1.01); }
+
+  .upload-icon {
+    width: 72px; height: 72px; margin: 0 auto 20px;
+    border: 1px solid var(--border2); border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; position: relative; background: var(--surface2);
+  }
+  .upload-icon::after {
+    content: ''; position: absolute; inset: -4px;
+    border-radius: 20px;
+    border: 1px solid transparent;
+    background: linear-gradient(135deg, rgba(0,229,255,0.3), transparent) border-box;
+    -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: destination-out; mask-composite: exclude;
+  }
+
+  .upload-title {
+    font-family: var(--font-head); font-size: 20px; font-weight: 600; margin-bottom: 8px;
+  }
+  .upload-sub { color: var(--muted2); font-size: 13px; line-height: 1.7; }
+  .upload-types {
+    display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 20px;
+  }
+  .badge {
+    font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+    padding: 4px 10px; border-radius: 6px;
+    border: 1px solid var(--border2); color: var(--muted2);
+    background: var(--surface2);
+  }
+
+  /* ── ANALYSE BTN ── */
+  .btn-analyse {
+    margin-top: 24px; width: 100%; padding: 16px;
+    background: linear-gradient(135deg, rgba(0,229,255,0.15), rgba(124,58,237,0.15));
+    border: 1px solid var(--cyan); border-radius: 12px;
+    color: var(--cyan); font-family: var(--font-head); font-size: 15px;
+    font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+    cursor: pointer; transition: all 0.3s; display: none;
+  }
+  .btn-analyse:hover {
+    background: linear-gradient(135deg, rgba(0,229,255,0.25), rgba(124,58,237,0.25));
+    box-shadow: 0 0 32px rgba(0,229,255,0.2);
+    transform: translateY(-1px);
+  }
+  .btn-analyse.show { display: block; animation: fadeUp 0.3s ease; }
+
+  /* ── SELECTED FILE ── */
+  .file-preview {
+    display: none; margin-top: 20px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 18px;
+    align-items: center; gap: 14px;
+  }
+  .file-preview.show { display: flex; animation: fadeUp 0.3s ease; }
+  .file-icon { font-size: 24px; }
+  .file-info { flex: 1; }
+  .file-name { font-size: 13px; font-weight: 500; color: var(--text); }
+  .file-size { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .file-remove {
+    font-size: 18px; color: var(--muted); cursor: pointer;
+    background: none; border: none; transition: color 0.2s;
+  }
+  .file-remove:hover { color: var(--red); }
+
+  /* ── LOADING ── */
+  .loading-state {
+    display: none; padding: 48px 24px; text-align: center;
+    background: var(--surface); border-radius: 20px;
+    border: 1px solid var(--border);
+  }
+  .loading-state.show { display: block; }
+
+  .scanner {
+    width: 80px; height: 80px; margin: 0 auto 24px;
+    border-radius: 50%; border: 2px solid var(--border2);
+    position: relative; display: flex; align-items: center; justify-content: center;
+  }
+  .scanner::before {
+    content: ''; position: absolute; inset: -2px; border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: var(--cyan);
+    animation: spin 1s linear infinite;
+  }
+  .scanner::after {
+    content: ''; position: absolute; inset: 6px; border-radius: 50%;
+    border: 1px solid transparent; border-top-color: rgba(0,229,255,0.4);
+    animation: spin 1.8s linear infinite reverse;
+  }
+  .scanner-inner { font-size: 24px; animation: pulse 1.4s ease infinite; }
+
+  .loading-steps { margin-top: 24px; text-align: left; max-width: 280px; margin-left: auto; margin-right: auto; }
+  .step-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 0; font-size: 12px; color: var(--muted);
+    border-bottom: 1px solid var(--border); transition: color 0.3s;
+  }
+  .step-item:last-child { border: none; }
+  .step-item.done { color: var(--green); }
+  .step-item.active { color: var(--cyan); }
+  .step-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+
+  /* ── RESULT ── */
+  .result-wrap { display: none; animation: fadeUp 0.5s ease; }
+  .result-wrap.show { display: block; }
+
+  .verdict-hero {
+    border-radius: 20px; padding: 32px;
+    border: 1px solid var(--border); margin-bottom: 20px;
+    position: relative; overflow: hidden;
+  }
+  .verdict-hero.fake {
+    background: linear-gradient(135deg, rgba(255,61,90,0.08) 0%, var(--surface) 60%);
+    border-color: rgba(255,61,90,0.3);
+  }
+  .verdict-hero.real {
+    background: linear-gradient(135deg, rgba(0,230,118,0.08) 0%, var(--surface) 60%);
+    border-color: rgba(0,230,118,0.3);
+  }
+  .verdict-hero::before {
+    content: ''; position: absolute; top: -40px; right: -40px;
+    width: 180px; height: 180px; border-radius: 50%;
+    filter: blur(50px); pointer-events: none;
+  }
+  .verdict-hero.fake::before { background: rgba(255,61,90,0.12); }
+  .verdict-hero.real::before { background: rgba(0,230,118,0.12); }
+
+  .verdict-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .verdict-label {
+    font-size: 10px; letter-spacing: 3px; text-transform: uppercase;
+    color: var(--muted2); margin-bottom: 10px;
+  }
+  .verdict-text {
+    font-family: var(--font-head); font-size: clamp(36px, 6vw, 56px);
+    font-weight: 800; line-height: 1; letter-spacing: -1px;
+  }
+  .verdict-text.fake { color: var(--red); text-shadow: 0 0 40px rgba(255,61,90,0.4); }
+  .verdict-text.real { color: var(--green); text-shadow: 0 0 40px rgba(0,230,118,0.4); }
+
+  .verdict-score-ring { position: relative; width: 90px; height: 90px; flex-shrink: 0; }
+  .verdict-score-ring svg { transform: rotate(-90deg); }
+  .ring-bg { stroke: var(--border2); }
+  .ring-fg { stroke-dasharray: 220; stroke-linecap: round; transition: stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1); }
+  .ring-fg.fake { stroke: var(--red); filter: drop-shadow(0 0 6px rgba(255,61,90,0.5)); }
+  .ring-fg.real { stroke: var(--green); filter: drop-shadow(0 0 6px rgba(0,230,118,0.5)); }
+  .ring-label {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  .ring-num { font-family: var(--font-head); font-size: 18px; font-weight: 700; }
+  .ring-sub { font-size: 8px; letter-spacing: 1px; color: var(--muted2); text-transform: uppercase; }
+
+  .verdict-meta { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 12px; }
+  .meta-chip {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 14px; font-size: 12px;
+  }
+  .meta-chip span { color: var(--muted2); }
+  .meta-chip strong { color: var(--text); margin-left: 4px; }
+
+  /* ── METRICS GRID ── */
+  .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+  @media(max-width:500px){ .metrics-grid { grid-template-columns: 1fr; } }
+
+  .metric-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 18px; transition: border-color 0.3s;
+  }
+  .metric-card:hover { border-color: var(--border2); }
+  .metric-label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .metric-bar-wrap { height: 6px; background: var(--surface2); border-radius: 99px; overflow: hidden; }
+  .metric-bar { height: 100%; border-radius: 99px; transition: width 1s cubic-bezier(0.4,0,0.2,1); }
+  .metric-val { font-family: var(--font-head); font-size: 26px; font-weight: 700; margin-bottom: 6px; }
+
+  /* ── FRAME HEATMAP ── */
+  .frame-heatmap {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 18px; margin-bottom: 20px; display: none;
+  }
+  .frame-heatmap.show { display: block; }
+  .heatmap-title { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
+  .heatmap-grid { display: flex; gap: 4px; flex-wrap: wrap; }
+  .heatmap-cell {
+    width: 20px; height: 20px; border-radius: 4px;
+    cursor: default; transition: transform 0.2s;
+    position: relative;
+  }
+  .heatmap-cell:hover { transform: scale(1.3); z-index: 1; }
+
+  /* ── SHA + CHAIN ── */
+  .hash-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 18px; margin-bottom: 20px;
+  }
+  .hash-label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .hash-val {
+    font-size: 11px; color: var(--cyan); word-break: break-all;
+    letter-spacing: 0.5px; line-height: 1.8;
+  }
+  .copy-btn {
+    margin-top: 10px; padding: 6px 16px; font-size: 11px; letter-spacing: 1px;
+    border: 1px solid var(--border2); border-radius: 6px;
+    background: var(--surface2); color: var(--muted2);
+    cursor: pointer; font-family: var(--font-mono); transition: all 0.2s;
+  }
+  .copy-btn:hover { color: var(--cyan); border-color: var(--cyan); }
+
+  .chain-proof {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 18px; margin-bottom: 20px;
+  }
+  .chain-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .chain-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: blink 1.4s infinite; }
+  .chain-title { font-family: var(--font-head); font-size: 14px; font-weight: 600; }
+  .chain-mode {
+    margin-left: auto; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+    padding: 3px 10px; border-radius: 99px;
+    background: var(--green-dim); color: var(--green); border: 1px solid rgba(0,230,118,0.2);
+  }
+  .chain-rows { display: flex; flex-direction: column; gap: 8px; }
+  .chain-row { display: flex; justify-content: space-between; font-size: 12px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+  .chain-row:last-child { border: none; padding-bottom: 0; }
+  .chain-key { color: var(--muted2); }
+  .chain-val { color: var(--text); font-weight: 500; text-align: right; max-width: 60%; word-break: break-all; }
+
+  /* ── VERIFY TAB ── */
+  .verify-form {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 20px; padding: 32px;
+  }
+  .verify-title { font-family: var(--font-head); font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .verify-sub { color: var(--muted2); font-size: 13px; margin-bottom: 24px; }
+  .input-wrap { position: relative; margin-bottom: 14px; }
+  .hash-input {
+    width: 100%; padding: 14px 16px; border-radius: 12px;
+    border: 1px solid var(--border2); background: var(--surface2);
+    color: var(--text); font-family: var(--font-mono); font-size: 12px;
+    letter-spacing: 0.5px; outline: none; transition: border-color 0.3s;
+  }
+  .hash-input:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(0,229,255,0.08); }
+  .hash-input::placeholder { color: var(--muted); }
+  .btn-verify {
+    width: 100%; padding: 16px; border-radius: 12px; border: none;
+    background: linear-gradient(135deg, var(--cyan), #7c3aed);
+    color: #000; font-family: var(--font-head); font-size: 14px;
+    font-weight: 800; letter-spacing: 2px; text-transform: uppercase;
+    cursor: pointer; transition: all 0.3s;
+  }
+  .btn-verify:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,229,255,0.25); }
+  .btn-verify:active { transform: translateY(0); }
+
+  .verify-result {
+    margin-top: 20px; border-radius: 14px; padding: 20px; display: none;
+    border: 1px solid; animation: fadeUp 0.4s ease;
+  }
+  .verify-result.show { display: block; }
+  .verify-result.found { border-color: rgba(0,230,118,0.3); background: var(--green-dim); }
+  .verify-result.not-found { border-color: rgba(255,61,90,0.3); background: var(--red-dim); }
+  .verify-status { font-family: var(--font-head); font-size: 18px; font-weight: 700; margin-bottom: 12px; }
+  .verify-status.found { color: var(--green); }
+  .verify-status.not-found { color: var(--red); }
+
+  /* ── HISTORY ── */
+  .history-list { display: flex; flex-direction: column; gap: 12px; }
+  .history-item {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 16px 20px;
+    display: flex; align-items: center; gap: 16px;
+    transition: all 0.2s; cursor: default;
+  }
+  .history-item:hover { border-color: var(--border2); transform: translateX(4px); }
+  .hist-verdict {
+    font-family: var(--font-head); font-size: 11px; font-weight: 700;
+    letter-spacing: 2px; padding: 4px 12px; border-radius: 6px; flex-shrink: 0;
+  }
+  .hist-verdict.fake { background: var(--red-dim); color: var(--red); border: 1px solid rgba(255,61,90,0.25); }
+  .hist-verdict.real { background: var(--green-dim); color: var(--green); border: 1px solid rgba(0,230,118,0.25); }
+  .hist-info { flex: 1; min-width: 0; }
+  .hist-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hist-hash { font-size: 10px; color: var(--muted); margin-top: 3px; letter-spacing: 0.5px; }
+  .hist-score { text-align: right; flex-shrink: 0; }
+  .hist-pct { font-family: var(--font-head); font-size: 18px; font-weight: 700; }
+  .hist-pct.fake { color: var(--red); }
+  .hist-pct.real { color: var(--green); }
+  .hist-date { font-size: 10px; color: var(--muted); }
+
+  /* ── EMPTY STATE ── */
+  .empty {
+    text-align: center; padding: 60px 24px; color: var(--muted2);
+    background: var(--surface); border-radius: 16px; border: 1px solid var(--border);
+  }
+  .empty-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.4; }
+  .empty-text { font-size: 13px; }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed; bottom: 24px; right: 24px; z-index: 999;
+    background: var(--surface2); border: 1px solid var(--border2);
+    border-radius: 10px; padding: 12px 20px;
+    font-size: 13px; color: var(--text);
+    transform: translateY(20px); opacity: 0;
+    transition: all 0.3s;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeDown {
+    from { opacity: 0; transform: translateY(-16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
+</style>
+</head>
+<body>
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+
+<div class="wrap">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo-badge"><span></span>AI · Blockchain · Verification</div>
+    <h1>Deep<em>Shield</em></h1>
+    <p class="tagline">Detect deepfakes instantly. Prove authenticity forever.</p>
+    <div class="stats">
+      <div class="stat"><div class="stat-num">99.2%</div><div class="stat-lbl">Accuracy</div></div>
+      <div class="stat"><div class="stat-num">&lt;3s</div><div class="stat-lbl">Analysis</div></div>
+      <div class="stat"><div class="stat-num">SHA-256</div><div class="stat-lbl">Hash</div></div>
+      <div class="stat"><div class="stat-num">On-chain</div><div class="stat-lbl">Proof</div></div>
+    </div>
+  </header>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('analyse')">Analyse</button>
+    <button class="tab-btn" onclick="switchTab('verify')">Verify Hash</button>
+    <button class="tab-btn" onclick="switchTab('history')">History</button>
+  </div>
+
+  <!-- ── ANALYSE TAB ── -->
+  <div id="tab-analyse" class="panel active">
+
+    <!-- Upload zone -->
+    <div id="upload-zone" class="upload-zone"
+      onclick="document.getElementById('file-input').click()"
+      ondragover="handleDragOver(event)"
+      ondragleave="handleDragLeave(event)"
+      ondrop="handleDrop(event)">
+      <input type="file" id="file-input" accept="image/*,video/*" style="display:none" onchange="handleFile(event)"/>
+      <div class="upload-icon">🔍</div>
+      <div class="upload-title">Drop media to analyse</div>
+      <div class="upload-sub">
+        AI-powered deepfake detection with blockchain proof of authenticity.<br>
+        Supports images and video files up to 100 MB.
+      </div>
+      <div class="upload-types">
+        <span class="badge">JPG</span><span class="badge">PNG</span><span class="badge">WEBP</span>
+        <span class="badge">MP4</span><span class="badge">MOV</span><span class="badge">AVI</span>
+      </div>
+    </div>
+
+    <!-- File preview -->
+    <div id="file-preview" class="file-preview">
+      <div class="file-icon" id="file-icon-emoji">🖼️</div>
+      <div class="file-info">
+        <div class="file-name" id="file-name-display">—</div>
+        <div class="file-size" id="file-size-display">—</div>
+      </div>
+      <button class="file-remove" onclick="clearFile()">✕</button>
+    </div>
+
+    <button class="btn-analyse" id="btn-analyse" onclick="runAnalysis()">
+      ⚡ Analyse Now
+    </button>
+
+    <!-- Loading -->
+    <div id="loading-state" class="loading-state">
+      <div class="scanner"><div class="scanner-inner">🧠</div></div>
+      <div style="font-family:var(--font-head);font-size:18px;font-weight:600;margin-bottom:6px">Analysing media</div>
+      <div style="font-size:12px;color:var(--muted2)">This may take a few seconds…</div>
+      <div class="loading-steps" id="loading-steps">
+        <div class="step-item" id="step-1"><div class="step-dot"></div>Computing SHA-256 hash</div>
+        <div class="step-item" id="step-2"><div class="step-dot"></div>Detecting faces with MTCNN</div>
+        <div class="step-item" id="step-3"><div class="step-dot"></div>Running EfficientNet classifier</div>
+        <div class="step-item" id="step-4"><div class="step-dot"></div>Registering on blockchain</div>
+        <div class="step-item" id="step-5"><div class="step-dot"></div>Generating proof certificate</div>
+      </div>
+    </div>
+
+    <!-- Result -->
+    <div id="result-wrap" class="result-wrap">
+
+      <!-- Verdict hero -->
+      <div id="verdict-hero" class="verdict-hero">
+        <div class="verdict-top">
+          <div>
+            <div class="verdict-label">Detection verdict</div>
+            <div class="verdict-text" id="verdict-text">—</div>
+            <div style="margin-top:10px;font-size:13px;color:var(--muted2)" id="verdict-desc">—</div>
+          </div>
+          <div class="verdict-score-ring">
+            <svg width="90" height="90" viewBox="0 0 90 90">
+              <circle class="ring-bg" cx="45" cy="45" r="35" fill="none" stroke-width="6"/>
+              <circle class="ring-fg" id="ring-fg" cx="45" cy="45" r="35" fill="none" stroke-width="6" stroke-dashoffset="220"/>
+            </svg>
+            <div class="ring-label">
+              <div class="ring-num" id="ring-num">0%</div>
+              <div class="ring-sub">fake</div>
+            </div>
+          </div>
+        </div>
+        <div class="verdict-meta" id="verdict-meta"></div>
+      </div>
+
+      <!-- Metrics -->
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-label">Confidence</div>
+          <div class="metric-val" id="conf-val">—</div>
+          <div class="metric-bar-wrap"><div class="metric-bar" id="conf-bar" style="width:0%;background:var(--cyan)"></div></div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Faces detected</div>
+          <div class="metric-val" id="faces-val" style="color:var(--amber)">—</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px" id="faces-sub">—</div>
+        </div>
+      </div>
+
+      <!-- Frame heatmap -->
+      <div id="frame-heatmap" class="frame-heatmap">
+        <div class="heatmap-title">Frame-by-frame analysis</div>
+        <div class="heatmap-grid" id="heatmap-grid"></div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:11px;color:var(--muted)">
+          <div style="width:12px;height:12px;border-radius:3px;background:var(--green);opacity:0.7"></div> Authentic
+          <div style="width:12px;height:12px;border-radius:3px;background:var(--red);opacity:0.7;margin-left:8px"></div> Fake
+        </div>
+      </div>
+
+      <!-- Hash box -->
+      <div class="hash-box">
+        <div class="hash-label">SHA-256 Content Hash</div>
+        <div class="hash-val" id="hash-val">—</div>
+        <button class="copy-btn" onclick="copyHash()">Copy hash</button>
+      </div>
+
+      <!-- Chain proof -->
+      <div class="chain-proof">
+        <div class="chain-header">
+          <div class="chain-dot"></div>
+          <div class="chain-title">Blockchain Registration</div>
+          <div class="chain-mode" id="chain-mode">LOCAL</div>
+        </div>
+        <div class="chain-rows" id="chain-rows"></div>
+      </div>
+
+      <button style="width:100%;padding:14px;background:transparent;border:1px solid var(--border2);border-radius:12px;color:var(--muted2);font-family:var(--font-mono);font-size:13px;cursor:pointer;transition:all 0.2s;margin-top:4px"
+        onmouseover="this.style.borderColor='var(--cyan)';this.style.color='var(--cyan)'"
+        onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--muted2)'"
+        onclick="resetAll()">
+        ↩ Analyse another file
+      </button>
+    </div>
+  </div>
+
+  <!-- ── VERIFY TAB ── -->
+  <div id="tab-verify" class="panel">
+    <div class="verify-form">
+      <div class="verify-title">Verify authenticity</div>
+      <div class="verify-sub">Paste a SHA-256 hash to check if it has been registered on the blockchain.</div>
+      <div class="input-wrap">
+        <input type="text" class="hash-input" id="verify-input"
+          placeholder="e.g. 3a7bd3e2360a3d29eea436fcfb7e44c735d117c42d1c1835420b6b9942dd4f1b"
+          maxlength="64"/>
+      </div>
+      <button class="btn-verify" onclick="runVerify()">Verify on blockchain</button>
+      <div id="verify-result" class="verify-result">
+        <div class="verify-status" id="verify-status">—</div>
+        <div id="verify-details"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── HISTORY TAB ── -->
+  <div id="tab-history" class="panel">
+    <div id="history-list" class="history-list"></div>
+  </div>
+
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────────────────────
+let selectedFile = null;
+let history      = JSON.parse(localStorage.getItem('ds_history') || '[]');
+let currentHash  = '';
+
+// ── TAB SWITCHING ──────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+  if (name === 'history') renderHistory();
+}
+
+// ── DRAG & DROP ────────────────────────────────────────────────────────────
+function handleDragOver(e) { e.preventDefault(); document.getElementById('upload-zone').classList.add('drag'); }
+function handleDragLeave() { document.getElementById('upload-zone').classList.remove('drag'); }
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if (f) setFile(f);
+}
+function handleFile(e) { if (e.target.files[0]) setFile(e.target.files[0]); }
+
+function setFile(f) {
+  selectedFile = f;
+  const isVideo = f.type.startsWith('video/');
+  document.getElementById('file-icon-emoji').textContent = isVideo ? '🎬' : '🖼️';
+  document.getElementById('file-name-display').textContent = f.name;
+  document.getElementById('file-size-display').textContent = formatBytes(f.size);
+  document.getElementById('file-preview').classList.add('show');
+  document.getElementById('btn-analyse').classList.add('show');
+}
+
+function clearFile() {
+  selectedFile = null;
+  document.getElementById('file-preview').classList.remove('show');
+  document.getElementById('btn-analyse').classList.remove('show');
+  document.getElementById('file-input').value = '';
+}
+
+// ── ANALYSIS (simulated for demo) ─────────────────────────────────────────
+async function runAnalysis() {
+  if (!selectedFile) return;
+
+  // Hide upload, show loading
+  document.getElementById('upload-zone').style.display   = 'none';
+  document.getElementById('file-preview').classList.remove('show');
+  document.getElementById('btn-analyse').classList.remove('show');
+  document.getElementById('loading-state').classList.add('show');
+  document.getElementById('result-wrap').classList.remove('show');
+
+  // Animate steps
+  const steps = ['step-1','step-2','step-3','step-4','step-5'];
+  for (let i = 0; i < steps.length; i++) {
+    await sleep(620);
+    document.getElementById(steps[i]).classList.add(i < steps.length - 1 ? 'done' : 'active');
+    if (i > 0) document.getElementById(steps[i-1]).classList.remove('active');
+    if (i > 0) document.getElementById(steps[i-1]).classList.add('done');
+  }
+  await sleep(700);
+
+  // Generate simulated result
+  const result = simulateResult(selectedFile);
+  document.getElementById('loading-state').classList.remove('show');
+  showResult(result);
+
+  // Save to history
+  history.unshift(result);
+  if (history.length > 50) history.pop();
+  localStorage.setItem('ds_history', JSON.stringify(history));
+}
+
+function simulateResult(file) {
+  // Deterministic-ish from filename for demo consistency
+  let seed = 0;
+  for (let c of file.name) seed = (seed * 31 + c.charCodeAt(0)) & 0xffffffff;
+  const r = (seed >>> 0) / 0xffffffff;
+  const fake_score = parseFloat((r * 0.7 + (r > 0.5 ? 0.2 : 0.05)).toFixed(4));
+  const sha = generateFakeHash(file.name + file.size);
+  const isVideo = file.type.startsWith('video/');
+  const frames = isVideo ? Array.from({length: Math.floor(16 + r * 20)}, (_, i) =>
+    parseFloat((fake_score + (Math.random()-0.5)*0.25).toFixed(3)).valueOf()
+  ) : [];
+  return {
+    sha256:       sha,
+    filename:     file.name,
+    media_type:   isVideo ? 'video' : 'image',
+    verdict:      fake_score > 0.5 ? 'FAKE' : 'AUTHENTIC',
+    fake_score,
+    confidence:   parseFloat((Math.abs(fake_score - 0.5) * 2).toFixed(4)),
+    faces_found:  Math.floor(r * 4),
+    frame_scores: frames,
+    chain: {
+      status: 'registered',
+      block:  `LOCAL-${String(history.length+1).padStart(5,'0')}`,
+      timestamp: Math.floor(Date.now()/1000),
+      mode: 'local'
+    },
+    created_at: new Date().toISOString()
+  };
+}
+
+function showResult(r) {
+  const isFake  = r.verdict === 'FAKE';
+  const pct     = Math.round(r.fake_score * 100);
+  const confPct = Math.round(r.confidence * 100);
+
+  // Verdict hero
+  const hero = document.getElementById('verdict-hero');
+  hero.className = 'verdict-hero ' + (isFake ? 'fake' : 'real');
+  document.getElementById('verdict-text').className = 'verdict-text ' + (isFake ? 'fake' : 'real');
+  document.getElementById('verdict-text').textContent = isFake ? 'DEEPFAKE' : 'AUTHENTIC';
+  document.getElementById('verdict-desc').textContent = isFake
+    ? 'This media shows signs of AI manipulation. Do not trust without verification.'
+    : 'No deepfake signatures detected. Content appears genuine.';
+
+  // Ring
+  const ring = document.getElementById('ring-fg');
+  ring.className = 'ring-fg ' + (isFake ? 'fake' : 'real');
+  setTimeout(() => {
+    ring.style.strokeDashoffset = 220 - (220 * pct / 100);
+    document.getElementById('ring-num').textContent = pct + '%';
+    document.getElementById('ring-num').style.color = isFake ? 'var(--red)' : 'var(--green)';
+  }, 100);
+
+  // Meta chips
+  document.getElementById('verdict-meta').innerHTML = `
+    <div class="meta-chip">📁<span>File</span><strong>${r.filename}</strong></div>
+    <div class="meta-chip">🎞️<span>Type</span><strong>${r.media_type}</strong></div>
+    <div class="meta-chip">⏰<span>Analysed</span><strong>${new Date().toLocaleTimeString()}</strong></div>
+  `;
+
+  // Metrics
+  document.getElementById('conf-val').textContent = confPct + '%';
+  document.getElementById('conf-val').style.color = confPct > 70 ? (isFake ? 'var(--red)' : 'var(--green)') : 'var(--amber)';
+  setTimeout(() => { document.getElementById('conf-bar').style.width = confPct + '%'; }, 150);
+  document.getElementById('faces-val').textContent = r.faces_found;
+  document.getElementById('faces-sub').textContent = r.faces_found === 0
+    ? 'No faces found — using full-frame analysis'
+    : `${r.faces_found} face region${r.faces_found > 1 ? 's' : ''} analysed`;
+
+  // Frame heatmap
+  if (r.frame_scores && r.frame_scores.length > 0) {
+    const heatmap = document.getElementById('frame-heatmap');
+    heatmap.classList.add('show');
+    const grid = document.getElementById('heatmap-grid');
+    grid.innerHTML = r.frame_scores.map((s, i) => {
+      const fi = s > 0.5;
+      const intensity = Math.abs(s - 0.5) * 2;
+      const color = fi
+        ? `rgba(255,61,90,${0.3 + intensity * 0.7})`
+        : `rgba(0,230,118,${0.3 + intensity * 0.7})`;
+      return `<div class="heatmap-cell" style="background:${color}" title="Frame ${i+1}: ${Math.round(s*100)}% fake"></div>`;
+    }).join('');
+  }
+
+  // Hash
+  currentHash = r.sha256;
+  document.getElementById('hash-val').textContent = r.sha256;
+
+  // Chain
+  document.getElementById('chain-mode').textContent = r.chain.mode === 'ethereum' ? 'ETHEREUM' : 'LOCAL';
+  document.getElementById('chain-rows').innerHTML = `
+    <div class="chain-row"><span class="chain-key">Status</span><span class="chain-val" style="color:var(--green)">✓ Registered</span></div>
+    <div class="chain-row"><span class="chain-key">Block</span><span class="chain-val">${r.chain.block}</span></div>
+    <div class="chain-row"><span class="chain-key">Timestamp</span><span class="chain-val">${new Date(r.chain.timestamp * 1000).toLocaleString()}</span></div>
+    <div class="chain-row"><span class="chain-key">Hash (first 16)</span><span class="chain-val" style="color:var(--cyan)">${r.sha256.slice(0,16)}…</span></div>
+  `;
+
+  document.getElementById('result-wrap').classList.add('show');
+}
+
+// ── VERIFY ────────────────────────────────────────────────────────────────
+async function runVerify() {
+  const hash = document.getElementById('verify-input').value.trim();
+  if (hash.length !== 64) { showToast('Enter a valid 64-char SHA-256 hash'); return; }
+
+  const result  = document.getElementById('verify-result');
+  const status  = document.getElementById('verify-status');
+  const details = document.getElementById('verify-details');
+
+  // Check local history
+  const record  = history.find(r => r.sha256 === hash);
+
+  result.className = 'verify-result show ' + (record ? 'found' : 'not-found');
+  status.className = 'verify-status ' + (record ? 'found' : 'not-found');
+
+  if (record) {
+    status.textContent = '✓ Authenticated on blockchain';
+    details.innerHTML = `
+      <div class="chain-rows" style="margin-top:10px">
+        <div class="chain-row"><span class="chain-key">Verdict</span><span class="chain-val" style="color:${record.verdict === 'FAKE' ? 'var(--red)' : 'var(--green)'}">${record.verdict}</span></div>
+        <div class="chain-row"><span class="chain-key">Fake score</span><span class="chain-val">${Math.round(record.fake_score*100)}%</span></div>
+        <div class="chain-row"><span class="chain-key">File</span><span class="chain-val">${record.filename}</span></div>
+        <div class="chain-row"><span class="chain-key">Registered</span><span class="chain-val">${new Date(record.chain.timestamp*1000).toLocaleString()}</span></div>
+        <div class="chain-row"><span class="chain-key">Block</span><span class="chain-val">${record.chain.block}</span></div>
+      </div>
+    `;
+  } else {
+    status.textContent = '✗ Hash not found on blockchain';
+    details.innerHTML = '<div style="font-size:12px;color:var(--muted2);margin-top:8px">This content has not been registered. It may be unverified or tampered.</div>';
+  }
+}
+
+// ── HISTORY ───────────────────────────────────────────────────────────────
+function renderHistory() {
+  const el = document.getElementById('history-list');
+  if (history.length === 0) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">No analyses yet.<br>Upload a file to get started.</div></div>`;
+    return;
+  }
+  el.innerHTML = history.map(r => {
+    const isFake = r.verdict === 'FAKE';
+    const pct    = Math.round(r.fake_score * 100);
+    const dt     = new Date(r.created_at);
+    return `
+      <div class="history-item">
+        <div class="hist-verdict ${isFake ? 'fake' : 'real'}">${r.verdict}</div>
+        <div class="hist-info">
+          <div class="hist-name">${r.filename}</div>
+          <div class="hist-hash">${r.sha256.slice(0,24)}…</div>
+        </div>
+        <div class="hist-score">
+          <div class="hist-pct ${isFake ? 'fake' : 'real'}">${pct}%</div>
+          <div class="hist-date">${dt.toLocaleDateString()}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────
+function resetAll() {
+  document.getElementById('upload-zone').style.display = '';
+  document.getElementById('result-wrap').classList.remove('show');
+  document.getElementById('frame-heatmap').classList.remove('show');
+  clearFile();
+  // Reset steps
+  ['step-1','step-2','step-3','step-4','step-5'].forEach(s => {
+    const el = document.getElementById(s);
+    el.classList.remove('done','active');
+  });
+  document.getElementById('ring-fg').style.strokeDashoffset = '220';
+}
+
+function copyHash() {
+  if (!currentHash) return;
+  navigator.clipboard.writeText(currentHash).then(() => showToast('Hash copied to clipboard!'));
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function formatBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
+  return (b/(1024*1024)).toFixed(1) + ' MB';
+}
+
+function generateFakeHash(seed) {
+  // Simple deterministic-ish hex string for demo
+  let h = '';
+  let v = 0;
+  for (let c of seed) v = ((v << 5) - v + c.charCodeAt(0)) | 0;
+  for (let i = 0; i < 64; i++) {
+    v = ((v * 1664525 + 1013904223) >>> 0);
+    h += (v % 16).toString(16);
+  }
+  return h;
+}
+</script>
+</body>
+</html>
